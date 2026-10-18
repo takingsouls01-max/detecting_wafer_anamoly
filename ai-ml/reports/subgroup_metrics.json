@@ -1,0 +1,42 @@
+{
+  "modern": {
+    "f1_score": 0.1038961038961039,
+    "precision": 0.05517241379310345,
+    "recall": 0.8888888888888888,
+    "roc_auc": 0.6763285024154588,
+    "average_precision": 0.0743059540002958,
+    "true_negatives": 70,
+    "false_positives": 137,
+    "false_negatives": 1,
+    "true_positives": 8,
+    "false_positive_rate": 0.6618357487922706,
+    "false_negative_rate": 0.1111111111111111,
+    "defect_rate": 0.041666666666666664,
+    "false_alarms_per_1000": 634.2592592592594,
+    "missed_defects_per_1000": 4.62962962962963,
+    "total_samples": 216,
+    "total_defects": 9,
+    "predicted_defects": 145,
+    "threshold": 0.00019722376600839198
+  },
+  "legacy": {
+    "f1_score": 0.0,
+    "precision": 0.0,
+    "recall": 0.0,
+    "roc_auc": NaN,
+    "average_precision": 0.0,
+    "true_negatives": 14,
+    "false_positives": 6,
+    "false_negatives": 0,
+    "true_positives": 0,
+    "false_positive_rate": 0.3,
+    "false_negative_rate": 0.0,
+    "defect_rate": 0.0,
+    "false_alarms_per_1000": 300.0,
+    "missed_defects_per_1000": 0.0,
+    "total_samples": 20,
+    "total_defects": 0,
+    "predicted_defects": 6,
+    "threshold": 0.00019722376600839198
+  }
+}

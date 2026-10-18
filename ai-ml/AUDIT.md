@@ -118,12 +118,12 @@ reconstructed = torch.randn(B, F)      # Decoder output
 target = torch.randn(B, 1, F)          # Input with channel dim
 
 diff = reconstructed - target          # Direct subtraction
-print(diff.shape)  # [8, 594, 594] ❌ WRONG! Should be [8, 594]
+print(diff.shape)  # [8, 8, 594] ❌ WRONG! Should be [8, 594]
 
 # Memory comparison:
-# Broken: 8 × 594 × 594 × 4 bytes = 11.2 MB
+# Broken: 8 × 8 × 594 × 4 bytes = 152 KB
 # Correct: 8 × 594 × 4 bytes = 19 KB
-# 590x memory explosion!
+# 8x memory explosion per batch dimension!
 ```
 
 **Repair:**
