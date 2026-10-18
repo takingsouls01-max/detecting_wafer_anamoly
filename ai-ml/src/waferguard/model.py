@@ -100,18 +100,24 @@ class WaferSAE(nn.Module):
         return torch.sigmoid(logits)
 
 
-def reconstruction_loss(reconstructed: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+def reconstruction_loss(
+    reconstructed: torch.Tensor,
+    target: torch.Tensor,
+    mask: torch.Tensor = None
+) -> torch.Tensor:
     """
-    Compute reconstruction loss with explicit shape validation.
+    Compute reconstruction loss with explicit shape validation and optional masking.
 
     BUG FIX #2: Ensures both tensors have matching shapes before computing MSE.
+    BUG FIX #3: Supports masking to exclude sentinel/engineered features from reconstruction.
 
     Args:
         reconstructed: [B, F] - decoder output
         target: [B, F] or [B, 1, F] - input (will be flattened if needed)
+        mask: [B, F] - optional boolean mask (True = include in loss)
 
     Returns:
-        loss: scalar - mean squared error
+        loss: scalar - mean squared error over masked features
     """
     # Flatten target if it has extra dimensions
     target_flat = target.flatten(start_dim=1) if target.ndim > 2 else target
@@ -120,9 +126,32 @@ def reconstruction_loss(reconstructed: torch.Tensor, target: torch.Tensor) -> to
     assert reconstructed.shape == target_flat.shape, \
         f"Shape mismatch: reconstructed {reconstructed.shape} vs target {target_flat.shape}"
 
-    # Compute per-sample MSE, then average
-    mse_per_sample = torch.mean((reconstructed - target_flat) ** 2, dim=1)  # [B]
-    return torch.mean(mse_per_sample)  # scalar
+    # Compute squared error
+    squared_error = (reconstructed - target_flat) ** 2  # [B, F]
+
+    # Apply mask if provided
+    if mask is not None:
+        # Ensure mask shape matches
+        assert squared_error.shape == mask.shape, \
+            f"Mask shape {mask.shape} doesn't match error shape {squared_error.shape}"
+
+        # Mask out features that shouldn't be reconstructed
+        masked_error = squared_error * mask.float()
+
+        # Compute mean over valid (masked) features per sample
+        # Count how many features are masked per sample to normalize correctly
+        n_valid_per_sample = mask.sum(dim=1).float()  # [B]
+
+        # Avoid division by zero
+        n_valid_per_sample = torch.clamp(n_valid_per_sample, min=1.0)
+
+        # Sum over features, normalize by count, then average over batch
+        mse_per_sample = masked_error.sum(dim=1) / n_valid_per_sample  # [B]
+        return torch.mean(mse_per_sample)  # scalar
+    else:
+        # Original behavior: mean over all features
+        mse_per_sample = torch.mean(squared_error, dim=1)  # [B]
+        return torch.mean(mse_per_sample)  # scalar
 
 
 def classification_loss(logits: torch.Tensor, labels: torch.Tensor) -> torch.Tensor:
@@ -148,7 +177,8 @@ def combined_loss(
     target: torch.Tensor,
     logits: torch.Tensor,
     labels: torch.Tensor,
-    lambda_clf: float = 1.0
+    lambda_clf: float = 1.0,
+    recon_mask: torch.Tensor = None
 ) -> Tuple[torch.Tensor, dict]:
     """
     Combined supervised autoencoder loss.
@@ -159,12 +189,13 @@ def combined_loss(
         logits: [B] - classification logits
         labels: [B] - defect labels
         lambda_clf: Weight for classification loss
+        recon_mask: [B, F] - optional mask for reconstruction (True = include)
 
     Returns:
         total_loss: scalar
         loss_dict: Dictionary with individual loss components
     """
-    recon_loss = reconstruction_loss(reconstructed, target)
+    recon_loss = reconstruction_loss(reconstructed, target, mask=recon_mask)
     clf_loss = classification_loss(logits, labels)
 
     total = recon_loss + lambda_clf * clf_loss

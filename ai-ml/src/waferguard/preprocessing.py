@@ -60,10 +60,11 @@ class WaferPreprocessor:
         # For modern wafers: both are continuous
 
         # Step 1: Prepare continuous features
+        # - Exclude sensor_0 for legacy wafers (it's a sentinel, not a measurement)
         # - Exclude sensor_1 for legacy wafers (will be one-hot encoded)
-        # - Keep sensor_0 as-is (it's the sentinel for legacy, continuous for modern)
         X_continuous = X.copy()
-        X_continuous[legacy_mask, 1] = np.nan  # Mark legacy sensor_1 as missing
+        X_continuous[legacy_mask, 0] = np.nan  # Mark legacy sensor_0 as missing (it's a sentinel)
+        X_continuous[legacy_mask, 1] = np.nan  # Mark legacy sensor_1 as missing (categorical)
 
         # Fit imputer and scaler on continuous features
         self.continuous_imputer.fit(X_continuous)
@@ -103,7 +104,8 @@ class WaferPreprocessor:
 
         # Step 1: Process continuous features
         X_continuous = X.copy()
-        X_continuous[legacy_mask, 1] = np.nan  # Exclude legacy sensor_1
+        X_continuous[legacy_mask, 0] = np.nan  # Exclude legacy sensor_0 (sentinel)
+        X_continuous[legacy_mask, 1] = np.nan  # Exclude legacy sensor_1 (categorical)
 
         X_cont_imputed = self.continuous_imputer.transform(X_continuous)
         X_cont_scaled = self.scaler.transform(X_cont_imputed)
@@ -144,6 +146,42 @@ class WaferPreprocessor:
     def get_feature_count(self) -> int:
         """Get total number of output features."""
         return self.n_continuous_features + 4  # +3 firmware codes +1 legacy indicator
+
+    def get_reconstruction_mask(self, legacy_info: Dict[str, np.ndarray]) -> np.ndarray:
+        """
+        Generate reconstruction mask for autoencoder loss.
+
+        The mask indicates which features should be reconstructed:
+        - Include: Continuous sensor measurements
+        - Exclude: Legacy sensor_0 (sentinel), Legacy sensor_1 (categorical codes),
+                   Firmware one-hot features (engineered), Legacy indicator (metadata)
+
+        Args:
+            legacy_info: Dict with legacy wafer information
+
+        Returns:
+            mask: [N, F_out] boolean array (True = reconstruct this feature)
+        """
+        legacy_mask = legacy_info['mask']
+        n_samples = len(legacy_mask)
+        n_features = self.get_feature_count()
+
+        # Initialize mask (True = reconstruct)
+        recon_mask = np.ones((n_samples, n_features), dtype=bool)
+
+        # Exclude sensor_0 for legacy wafers (it's a sentinel, column 0)
+        recon_mask[legacy_mask, 0] = False
+
+        # Exclude sensor_1 for legacy wafers (categorical codes, column 1)
+        recon_mask[legacy_mask, 1] = False
+
+        # Exclude firmware one-hot features (columns 590-592, engineered features)
+        recon_mask[:, 590:593] = False
+
+        # Exclude legacy indicator (column 593, metadata)
+        recon_mask[:, 593] = False
+
+        return recon_mask
 
     def save(self, filepath: str):
         """Save fitted preprocessor to disk."""

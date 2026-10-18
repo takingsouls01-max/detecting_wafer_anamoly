@@ -13,7 +13,9 @@ def create_dataloaders(
     X_val: np.ndarray,
     y_val: np.ndarray,
     batch_size: int = 64,
-    seed: int = 1337
+    seed: int = 1337,
+    recon_mask_train: np.ndarray = None,
+    recon_mask_val: np.ndarray = None
 ) -> Tuple[DataLoader, DataLoader]:
     """
     Create PyTorch dataloaders.
@@ -23,6 +25,7 @@ def create_dataloaders(
         X_val, y_val: Validation data
         batch_size: Batch size
         seed: Random seed for reproducibility
+        recon_mask_train, recon_mask_val: Optional reconstruction masks
 
     Returns:
         train_loader, val_loader
@@ -33,10 +36,21 @@ def create_dataloaders(
     X_val_t = torch.from_numpy(X_val).float()
     y_val_t = torch.from_numpy(y_val).float()
 
+    # Create datasets with optional masks
+    if recon_mask_train is not None and recon_mask_val is not None:
+        mask_train_t = torch.from_numpy(recon_mask_train).bool()
+        mask_val_t = torch.from_numpy(recon_mask_val).bool()
+
+        train_dataset = TensorDataset(X_train_t, y_train_t, mask_train_t)
+        val_dataset = TensorDataset(X_val_t, y_val_t, mask_val_t)
+    else:
+        train_dataset = TensorDataset(X_train_t, y_train_t)
+        val_dataset = TensorDataset(X_val_t, y_val_t)
+
     # Create dataloaders
     g = torch.Generator().manual_seed(seed)
     train_loader = DataLoader(
-        TensorDataset(X_train_t, y_train_t),
+        train_dataset,
         batch_size=batch_size,
         shuffle=True,
         generator=g,
@@ -44,7 +58,7 @@ def create_dataloaders(
     )
 
     val_loader = DataLoader(
-        TensorDataset(X_val_t, y_val_t),
+        val_dataset,
         batch_size=batch_size,
         shuffle=False,
         drop_last=False  # Keep all validation samples
@@ -58,7 +72,8 @@ def train_epoch(
     loader: DataLoader,
     optimizer: torch.optim.Optimizer,
     device: torch.device,
-    lambda_clf: float = 1.0
+    lambda_clf: float = 1.0,
+    use_recon_mask: bool = False
 ) -> Dict[str, float]:
     """Train for one epoch."""
     from .model import combined_loss
@@ -67,7 +82,14 @@ def train_epoch(
     losses = {'total': 0.0, 'reconstruction': 0.0, 'classification': 0.0}
     n_batches = 0
 
-    for batch_x, batch_y in loader:
+    for batch_data in loader:
+        if use_recon_mask:
+            batch_x, batch_y, batch_mask = batch_data
+            batch_mask = batch_mask.to(device)
+        else:
+            batch_x, batch_y = batch_data
+            batch_mask = None
+
         batch_x = batch_x.to(device)
         batch_y = batch_y.to(device)
 
@@ -76,7 +98,7 @@ def train_epoch(
 
         # Compute loss
         loss, loss_dict = combined_loss(
-            reconstructed, batch_x, logits, batch_y, lambda_clf
+            reconstructed, batch_x, logits, batch_y, lambda_clf, recon_mask=batch_mask
         )
 
         # Backward pass
@@ -99,7 +121,8 @@ def evaluate(
     model: nn.Module,
     loader: DataLoader,
     device: torch.device,
-    lambda_clf: float = 1.0
+    lambda_clf: float = 1.0,
+    use_recon_mask: bool = False
 ) -> Tuple[Dict[str, float], np.ndarray, np.ndarray]:
     """Evaluate model and return losses + predictions."""
     from .model import combined_loss
@@ -111,7 +134,14 @@ def evaluate(
     all_probs = []
     all_labels = []
 
-    for batch_x, batch_y in loader:
+    for batch_data in loader:
+        if use_recon_mask:
+            batch_x, batch_y, batch_mask = batch_data
+            batch_mask = batch_mask.to(device)
+        else:
+            batch_x, batch_y = batch_data
+            batch_mask = None
+
         batch_x = batch_x.to(device)
         batch_y = batch_y.to(device)
 
@@ -120,7 +150,7 @@ def evaluate(
 
         # Compute loss
         loss, loss_dict = combined_loss(
-            reconstructed, batch_x, logits, batch_y, lambda_clf
+            reconstructed, batch_x, logits, batch_y, lambda_clf, recon_mask=batch_mask
         )
 
         # Accumulate losses
