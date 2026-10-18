@@ -42,7 +42,7 @@ def test_reconstruction_loss_shape_handling():
     assert torch.isfinite(loss_1), "Loss should be finite"
     assert torch.isfinite(loss_2), "Loss should be finite"
 
-    print("✅ PASS: Reconstruction loss handles shape variations correctly")
+    print("[OK] PASS: Reconstruction loss handles shape variations correctly")
     print(f"   Loss with flat input [B, F]: {loss_1.item():.4f}")
     print(f"   Loss with channel input [B, 1, F]: {loss_2.item():.4f}")
 
@@ -62,11 +62,12 @@ def test_broken_loss_demonstrates_bug():
     # WRONG way (original bug): direct subtraction without flattening
     diff = reconstructed - target  # Broadcasting happens here!
 
-    # This creates [B, F, F] due to broadcasting rules:
-    # [B, F] - [B, 1, F] → [B, F, F]
-    expected_broken_shape = (B, F, F)
+    # This creates [B, B, F] due to broadcasting rules:
+    # [B, F] - [B, 1, F] → [1, B, F] - [B, 1, F] → [B, B, F]
+    # (reconstructed is expanded to [1,B,F], then broadcast to [B,B,F])
+    expected_broken_shape = (B, B, F)
 
-    print(f"\n⚠️  ORIGINAL BUG DEMONSTRATION:")
+    print(f"\nORIGINAL BUG DEMONSTRATION:")
     print(f"   reconstructed.shape: {reconstructed.shape}")
     print(f"   target.shape: {target.shape}")
     print(f"   diff.shape (after broadcasting): {diff.shape}")
@@ -81,7 +82,7 @@ def test_broken_loss_demonstrates_bug():
     print(f"   Broken loss value: {broken_loss.item():.4f}")
     print(f"   Memory used: {diff.numel() * 4 / 1024 / 1024:.2f} MB (vs {B*F*4/1024:.2f} KB correct)")
 
-    print("✅ PASS: Successfully demonstrated the original broadcasting bug")
+    print("[OK] PASS: Successfully demonstrated the original broadcasting bug")
 
 
 def test_model_forward_shapes():
@@ -108,7 +109,7 @@ def test_model_forward_shapes():
         assert recon2.shape == (B, d_in), f"Wrong recon shape for batch {B} with channel"
         assert logits2.shape == (B,), f"Wrong logits shape for batch {B} with channel"
 
-    print("✅ PASS: Model forward pass produces correct shapes for all batch sizes")
+    print("[OK] PASS: Model forward pass produces correct shapes for all batch sizes")
     print(f"   Tested batch sizes: {batch_sizes}")
 
 
@@ -133,7 +134,7 @@ def test_gradient_flow():
         assert param.grad is not None, f"No gradient for {name}"
         assert torch.isfinite(param.grad).all(), f"Non-finite gradient for {name}"
 
-    print("✅ PASS: Gradients flow correctly through loss computation")
+    print("[OK] PASS: Gradients flow correctly through loss computation")
     print(f"   Loss: {loss.item():.4f}")
     print(f"   Max gradient norm: {max(p.grad.abs().max() for p in model.parameters()):.4f}")
 
@@ -162,7 +163,84 @@ def test_batch_size_one_edge_case():
     assert latent.shape == (1, 32), f"Batch dim lost in latent: {latent.shape}"
     assert loss.shape == torch.Size([]), f"Loss should be scalar: {loss.shape}"
 
-    print("✅ PASS: Batch size = 1 handled correctly (no dimension squeeze bugs)")
+    print("[OK] PASS: Batch size = 1 handled correctly (no dimension squeeze bugs)")
+
+
+def test_loss_values_and_gradients_reference():
+    """
+    Compare corrected loss VALUES and GRADIENTS against explicit small reference.
+
+    This provides a concrete numerical verification that the fix is correct.
+    """
+    torch.manual_seed(42)
+    B, F = 2, 3  # Small size for manual verification
+
+    # Create simple test data
+    reconstructed = torch.tensor([
+        [1.0, 2.0, 3.0],
+        [4.0, 5.0, 6.0]
+    ], requires_grad=True)
+
+    target_flat = torch.tensor([
+        [1.5, 2.5, 3.5],
+        [4.5, 5.5, 6.5]
+    ])
+
+    # Compute loss
+    loss = reconstruction_loss(reconstructed, target_flat)
+
+    # Expected loss (manually computed):
+    # diff = [[-0.5, -0.5, -0.5], [-0.5, -0.5, -0.5]]
+    # mse_per_sample = [mean(0.25, 0.25, 0.25), mean(0.25, 0.25, 0.25)] = [0.25, 0.25]
+    # loss = mean(0.25, 0.25) = 0.25
+    expected_loss = 0.25
+
+    assert torch.allclose(loss, torch.tensor(expected_loss), rtol=1e-5), \
+        f"Loss value mismatch: got {loss.item()}, expected {expected_loss}"
+
+    # Compute gradients
+    loss.backward()
+
+    # Expected gradient (manually computed):
+    # d(loss)/d(reconstructed) = 2 * (reconstructed - target) / (B * F)
+    # = 2 * [-0.5, -0.5, -0.5, -0.5, -0.5, -0.5] / 6
+    # = [-1/6, -1/6, -1/6, -1/6, -1/6, -1/6]
+    # = [-0.1667, -0.1667, -0.1667, -0.1667, -0.1667, -0.1667]
+    expected_grad = torch.full((B, F), -1.0/6.0)
+
+    assert torch.allclose(reconstructed.grad, expected_grad, rtol=1e-4), \
+        f"Gradient mismatch:\nGot:\n{reconstructed.grad}\nExpected:\n{expected_grad}"
+
+    print("[OK] PASS: Loss values and gradients match hand-computed reference")
+    print(f"   Loss value: {loss.item():.6f} (expected: {expected_loss:.6f})")
+    print(f"   Gradient (first element): {reconstructed.grad[0,0].item():.6f} (expected: {expected_grad[0,0].item():.6f})")
+
+
+def test_partial_batch_handling():
+    """
+    Test partial batch handling (e.g., last batch in epoch may be smaller).
+    """
+    d_in = 594
+    model = WaferSAE(d_in, d_hidden=128, d_latent=32)
+
+    # Simulate partial batches
+    partial_sizes = [1, 7, 13, 32]  # Various partial batch sizes
+
+    for B in partial_sizes:
+        x = torch.randn(B, d_in)
+        y = torch.randint(0, 2, (B,)).float()
+
+        recon, logits, latent = model(x)
+        loss, loss_dict = combined_loss(recon, x, logits, y)
+
+        assert loss.shape == torch.Size([]), f"Loss not scalar for batch {B}"
+        assert torch.isfinite(loss), f"Loss not finite for batch {B}"
+
+        # Verify loss can be backpropped
+        loss.backward()
+
+    print("[OK] PASS: Partial batch handling verified")
+    print(f"   Tested partial batch sizes: {partial_sizes}")
 
 
 if __name__ == "__main__":
@@ -182,3 +260,7 @@ if __name__ == "__main__":
     test_gradient_flow()
     print()
     test_batch_size_one_edge_case()
+    print()
+    test_loss_values_and_gradients_reference()
+    print()
+    test_partial_batch_handling()

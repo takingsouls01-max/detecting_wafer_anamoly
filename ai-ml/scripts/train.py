@@ -7,6 +7,7 @@ sys.path.insert(0, 'src')
 
 import os
 import json
+import copy
 import torch
 import numpy as np
 from sklearn.linear_model import LogisticRegression
@@ -75,7 +76,7 @@ def train_autoencoder(train_loader, val_loader, d_in):
     best_val_f1 = 0.0
     patience_counter = 0
     patience = 10
-    best_model_state = model.state_dict().copy()  # Initialize with initial weights
+    best_model_state = copy.deepcopy(model.state_dict())  # Deep copy for safety
 
     for epoch in range(1, 41):
         # Train
@@ -92,7 +93,7 @@ def train_autoencoder(train_loader, val_loader, d_in):
         if val_f1 > best_val_f1:
             best_val_f1 = val_f1
             patience_counter = 0
-            best_model_state = model.state_dict().copy()
+            best_model_state = copy.deepcopy(model.state_dict())
         else:
             patience_counter += 1
 
