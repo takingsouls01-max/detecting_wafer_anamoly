@@ -1,0 +1,57 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# PyTorch Models (large files)
+*.pt
+*.pth
+*.ckpt
+
+# Scikit-learn Models
+*.joblib
+*.pkl
+*.pickle
+
+# Data Files (large - don't push to GitHub)
+*.csv
+*.tsv
+*.json
+*.parquet
+
+# Virtual Environments
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Temp files
+*.tmp
+*.temp
+.cache/
+
+# Keep these exceptions (small essential files)
+!reports/*.json
+!reports/*.csv
+!requirements.txt
