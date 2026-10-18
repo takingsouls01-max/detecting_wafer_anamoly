@@ -1,0 +1,40 @@
+============================= test session starts =============================
+platform win32 -- Python 3.13.6, pytest-9.1.1, pluggy-1.6.0 -- C:\Program Files\Python313\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\Takin\Downloads\gdg-wildcard-2024\ai-ml
+plugins: anyio-4.10.0
+collecting ... collected 31 items
+
+tests/test_causality.py::test_no_data_leakage_via_future_mutation PASSED [  3%]
+tests/test_causality.py::test_temporal_split_ordering PASSED             [  6%]
+tests/test_checkpointing.py::test_deepcopy_checkpoint_independence PASSED [  9%]
+tests/test_checkpointing.py::test_shallow_copy_fails PASSED              [ 12%]
+tests/test_inference_independence.py::test_batch_order_independence PASSED [ 16%]
+tests/test_inference_independence.py::test_batch_size_independence PASSED [ 19%]
+tests/test_inference_independence.py::test_companion_independence PASSED [ 22%]
+tests/test_inference_independence.py::test_reconstruction_batch_independence PASSED [ 25%]
+tests/test_legacy_semantics.py::test_legacy_station_detection PASSED     [ 29%]
+tests/test_legacy_semantics.py::test_firmware_codes_are_categorical PASSED [ 32%]
+tests/test_legacy_semantics.py::test_categorical_codes_not_scaled PASSED [ 35%]
+tests/test_legacy_semantics.py::test_modern_sensor1_remains_continuous PASSED [ 38%]
+tests/test_legacy_semantics.py::test_preprocessing_preserves_legacy_indicator PASSED [ 41%]
+tests/test_legacy_semantics_reconstruction.py::test_legacy_sensor0_not_scaled PASSED [ 45%]
+tests/test_legacy_semantics_reconstruction.py::test_reconstruction_mask_generation PASSED [ 48%]
+tests/test_legacy_semantics_reconstruction.py::test_reconstruction_loss_with_mask PASSED [ 51%]
+tests/test_legacy_semantics_reconstruction.py::test_full_pipeline_with_mask PASSED [ 54%]
+tests/test_loss_integrity.py::test_reconstruction_loss_shape_handling PASSED [ 58%]
+tests/test_loss_integrity.py::test_broken_loss_demonstrates_bug PASSED   [ 61%]
+tests/test_loss_integrity.py::test_model_forward_shapes PASSED           [ 64%]
+tests/test_loss_integrity.py::test_gradient_flow PASSED                  [ 67%]
+tests/test_loss_integrity.py::test_batch_size_one_edge_case PASSED       [ 70%]
+tests/test_loss_integrity.py::test_loss_values_and_gradients_reference PASSED [ 74%]
+tests/test_loss_integrity.py::test_partial_batch_handling PASSED         [ 77%]
+tests/test_temporal_safety.py::test_timestamp_parsing PASSED             [ 80%]
+tests/test_temporal_safety.py::test_split_boundary_ties PASSED           [ 83%]
+tests/test_temporal_safety.py::test_duplicate_timestamps PASSED          [ 87%]
+tests/test_temporal_safety.py::test_fixed_information_cutoff PASSED      [ 90%]
+tests/test_temporal_safety.py::test_negative_control_leaking_preprocessor PASSED [ 93%]
+tests/test_temporal_safety.py::test_training_only_transforms PASSED      [ 96%]
+tests/test_temporal_safety.py::test_limitations_documented PASSED        [100%]
+
+============================= 31 passed in 37.21s =============================
