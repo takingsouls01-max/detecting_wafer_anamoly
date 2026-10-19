@@ -29,16 +29,35 @@ def compute_metrics(
         Dictionary of metrics
     """
     # Classification metrics
-    f1 = f1_score(y_true, y_pred)
-    precision = precision_score(y_true, y_pred, zero_division=0)
-    recall = recall_score(y_true, y_pred)
+    f1 = f1_score(y_true, y_pred, zero_division=0.0)
+    precision = precision_score(y_true, y_pred, zero_division=0.0)
+    recall = recall_score(y_true, y_pred, zero_division=0.0)
 
-    # Ranking metrics
-    roc_auc = roc_auc_score(y_true, y_probs)
-    avg_precision = average_precision_score(y_true, y_probs)
+    # Ranking metrics (handle single-class case)
+    import warnings
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        try:
+            roc_auc = roc_auc_score(y_true, y_probs)
+            # Check for NaN (undefined ROC-AUC)
+            if np.isnan(roc_auc):
+                roc_auc = None
+        except (ValueError, Exception):
+            # Single class present - ROC-AUC undefined
+            roc_auc = None
 
-    # Confusion matrix
-    tn, fp, fn, tp = confusion_matrix(y_true, y_pred).ravel()
+        try:
+            avg_precision = average_precision_score(y_true, y_probs)
+            # Check for NaN (undefined AP)
+            if np.isnan(avg_precision):
+                avg_precision = None
+        except (ValueError, Exception):
+            # No positive class - AP undefined
+            avg_precision = None
+
+    # Confusion matrix (explicitly specify labels to handle single-class case)
+    cm = confusion_matrix(y_true, y_pred, labels=[0, 1])
+    tn, fp, fn, tp = cm.ravel()
 
     # Derived metrics
     total = len(y_true)
@@ -57,8 +76,8 @@ def compute_metrics(
         'f1_score': float(f1),
         'precision': float(precision),
         'recall': float(recall),
-        'roc_auc': float(roc_auc),
-        'average_precision': float(avg_precision),
+        'roc_auc': float(roc_auc) if roc_auc is not None else None,
+        'average_precision': float(avg_precision) if avg_precision is not None else None,
 
         # Confusion matrix
         'true_negatives': int(tn),

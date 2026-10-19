@@ -80,7 +80,7 @@ def train_epoch(
 
     model.train()
     losses = {'total': 0.0, 'reconstruction': 0.0, 'classification': 0.0}
-    n_batches = 0
+    n_samples = 0
 
     for batch_data in loader:
         if use_recon_mask:
@@ -92,6 +92,8 @@ def train_epoch(
 
         batch_x = batch_x.to(device)
         batch_y = batch_y.to(device)
+
+        batch_size = batch_x.size(0)
 
         # Forward pass
         reconstructed, logits, _ = model(batch_x)
@@ -107,13 +109,13 @@ def train_epoch(
         nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
         optimizer.step()
 
-        # Accumulate losses
+        # Accumulate losses weighted by batch size
         for k, v in loss_dict.items():
-            losses[k] += v
-        n_batches += 1
+            losses[k] += v * batch_size
+        n_samples += batch_size
 
-    # Average losses
-    return {k: v / n_batches for k, v in losses.items()}
+    # Average losses by total samples (not batches)
+    return {k: v / n_samples for k, v in losses.items()}
 
 
 @torch.no_grad()
@@ -129,7 +131,7 @@ def evaluate(
 
     model.eval()
     losses = {'total': 0.0, 'reconstruction': 0.0, 'classification': 0.0}
-    n_batches = 0
+    n_samples = 0
 
     all_probs = []
     all_labels = []
@@ -145,6 +147,8 @@ def evaluate(
         batch_x = batch_x.to(device)
         batch_y = batch_y.to(device)
 
+        batch_size = batch_x.size(0)
+
         # Forward pass
         reconstructed, logits, _ = model(batch_x)
 
@@ -153,18 +157,18 @@ def evaluate(
             reconstructed, batch_x, logits, batch_y, lambda_clf, recon_mask=batch_mask
         )
 
-        # Accumulate losses
+        # Accumulate losses weighted by batch size
         for k, v in loss_dict.items():
-            losses[k] += v
-        n_batches += 1
+            losses[k] += v * batch_size
+        n_samples += batch_size
 
         # Store predictions
         probs = torch.sigmoid(logits).cpu().numpy()
         all_probs.append(probs)
         all_labels.append(batch_y.cpu().numpy())
 
-    # Average losses
-    avg_losses = {k: v / n_batches for k, v in losses.items()}
+    # Average losses by total samples (not batches)
+    avg_losses = {k: v / n_samples for k, v in losses.items()}
 
     # Concatenate predictions
     probs = np.concatenate(all_probs)
